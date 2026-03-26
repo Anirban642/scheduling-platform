@@ -1,12 +1,13 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle, Calendar, Clock } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 
-export default function BookingConfirmedPage() {
+function BookingConfirmedContent() {
   const searchParams = useSearchParams();
   const bookingId = searchParams.get('id');
 
@@ -37,6 +38,12 @@ export default function BookingConfirmedPage() {
             </ul>
           </div>
 
+          {bookingId && (
+            <div className="text-xs text-gray-500">
+              Booking ID: {bookingId}
+            </div>
+          )}
+
           <div className="pt-4">
             <Link href="/">
               <Button className="w-full">Back to Home</Button>
@@ -45,5 +52,20 @@ export default function BookingConfirmedPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function BookingConfirmedPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <BookingConfirmedContent />
+    </Suspense>
   );
 }
