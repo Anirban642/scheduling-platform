@@ -6,6 +6,7 @@ import clientPromise from '@/lib/db/mongodbClient';
 import connectDB from '@/lib/db/mongodb';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
+import { clear } from 'console';
 
 export const authOptions: NextAuthOptions = {
   adapter: MongoDBAdapter(clientPromise),
@@ -17,9 +18,10 @@ export const authOptions: NextAuthOptions = {
         params: {
           access_type: 'offline',
           prompt: 'consent',
-          scope: 'openid email profile https://www.googleapis.com/auth/calendar',
+          scope: 'openid email profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
         },
       },
+      allowDangerousEmailAccountLinking: true, // ← ADD THIS
     }),
     CredentialsProvider({
       name: 'Credentials',
@@ -57,21 +59,61 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user, account }) {
+    async signIn({ user, account, profile }) {
+      // Allow sign in
+      if (account?.provider === 'google') {
+        await connectDB();
+        
+        // Check if user exists
+        let existingUser = await User.findOne({ email: user.email });
+        
+        if (!existingUser) {
+          // Create new user if doesn't exist
+          const username = user.email?.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') || 
+                          `user${Date.now()}`;
+          
+          existingUser = await User.create({
+            name: user.name,
+            email: user.email,
+            username: username,
+            image: user.image,
+            emailVerified: new Date(),
+            timeZone: 'UTC',
+          });
+        }
+        
+        // Update user ID to our custom user
+        user.id = existingUser._id.toString();
+        
+        // Store tokens if available
+        if (account.access_token && account.refresh_token) {
+          await User.findByIdAndUpdate(existingUser._id, {
+            googleCalendarToken: {
+              access_token: account.access_token,
+              refresh_token: account.refresh_token,
+              expiry_date: account.expires_at! * 1000,
+            },
+          });
+        }
+      }
+      
+      return true;
+    },
+    async jwt({ token, user, account, trigger }) {
       if (user) {
         token.id = user.id;
-        token.username = (user as any).username;
+        
+        // Get username from database
+        await connectDB();
+        const dbUser = await User.findById(user.id);
+        if (dbUser) {
+          token.username = dbUser.username;
+        }
       }
 
       if (account?.provider === 'google' && account.access_token) {
-        await connectDB();
-        await User.findByIdAndUpdate(token.id, {
-          googleCalendarToken: {
-            access_token: account.access_token,
-            refresh_token: account.refresh_token,
-            expiry_date: account.expires_at! * 1000,
-          },
-        });
+        token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
       }
 
       return token;
@@ -86,9 +128,11 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/login',
+    error: '/login', // ← Redirect errors to login page
   },
   session: {
     strategy: 'jwt',
   },
   secret: process.env.NEXTAUTH_SECRET,
+  debug: true, // ← Enable debug mode to see detailed logs
 };
