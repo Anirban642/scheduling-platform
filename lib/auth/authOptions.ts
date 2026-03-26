@@ -49,7 +49,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           username: user.username,
-          image: user.image,
+          image: user.image || undefined,
         };
       },
     }),
@@ -66,10 +66,10 @@ export const authOptions: NextAuthOptions = {
                           `user${Date.now()}`;
           
           existingUser = await User.create({
-            name: user.name,
-            email: user.email,
+            name: user.name || 'User',
+            email: user.email || '',
             username: username,
-            image: user.image,
+            image: user.image || undefined,
             emailVerified: new Date(),
             timeZone: 'UTC',
           });
@@ -90,7 +90,7 @@ export const authOptions: NextAuthOptions = {
       
       return true;
     },
-    async jwt({ token, user, account, trigger }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
         
@@ -110,8 +110,8 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).username = token.username;
+        (session.user as any).id = token.id as string;
+        (session.user as any).username = token.username as string;
       }
       return session;
     },
