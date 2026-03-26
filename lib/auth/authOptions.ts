@@ -1,15 +1,11 @@
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
-import { MongoDBAdapter } from '@auth/mongodb-adapter';
-import clientPromise from '@/lib/db/mongodbClient';
 import connectDB from '@/lib/db/mongodb';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
-import { clear } from 'console';
 
 export const authOptions: NextAuthOptions = {
-  adapter: MongoDBAdapter(clientPromise),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -21,7 +17,7 @@ export const authOptions: NextAuthOptions = {
           scope: 'openid email profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
         },
       },
-      allowDangerousEmailAccountLinking: true, // ← ADD THIS
+      allowDangerousEmailAccountLinking: true,
     }),
     CredentialsProvider({
       name: 'Credentials',
@@ -60,15 +56,12 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      // Allow sign in
       if (account?.provider === 'google') {
         await connectDB();
         
-        // Check if user exists
         let existingUser = await User.findOne({ email: user.email });
         
         if (!existingUser) {
-          // Create new user if doesn't exist
           const username = user.email?.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') || 
                           `user${Date.now()}`;
           
@@ -82,10 +75,8 @@ export const authOptions: NextAuthOptions = {
           });
         }
         
-        // Update user ID to our custom user
         user.id = existingUser._id.toString();
         
-        // Store tokens if available
         if (account.access_token && account.refresh_token) {
           await User.findByIdAndUpdate(existingUser._id, {
             googleCalendarToken: {
@@ -103,7 +94,6 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         
-        // Get username from database
         await connectDB();
         const dbUser = await User.findById(user.id);
         if (dbUser) {
@@ -128,11 +118,11 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/login',
-    error: '/login', // ← Redirect errors to login page
+    error: '/login',
   },
   session: {
     strategy: 'jwt',
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: true, // ← Enable debug mode to see detailed logs
+  debug: process.env.NODE_ENV === 'development',
 };
